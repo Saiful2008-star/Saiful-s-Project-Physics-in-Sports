@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Rifle Ballistics Explorer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Application Structure Plan: The SPA will adopt a thematic, scrollable single-page layout with a sticky top navigation bar for quick access to distinct sections. This structure is chosen over a direct report mirror to enhance user exploration and comprehension by grouping related physics concepts logically.
+        1. Hero Section: Title and brief introduction.
+        2. Navigation Bar (Sticky): Links to: Fundamentals, Internal Ballistics, External Ballistics, Terminal Ballistics, Optimizing Precision, Conclusion.
+        3. Section: Fundamental Principles: Newton's Laws (interactive cards), Energy Transfer (diagram).
+        4. Section: Internal Ballistics: Ignition, Pressure, Rifling (interactive diagram for spin).
+        5. Section: External Ballistics: Bullet Drop (Chart.js), Drag, Wind Drift (interactive diagram), Environmental Variables (interactive controls updating text/visuals based on Table 2 logic), Macro Effects. This will be the most interactive section.
+        6. Section: Terminal Ballistics: Energy on Impact, Cavities (simplified diagrams).
+        7. Section: Optimizing Precision: Tabs for Ammunition, Shooter Technique, Mathematical Tools (MOA/Mil-Dot Chart.js chart/table from Table 1).
+        8. Section: Conclusion: Summary.
+        User Flow: Linear scrolling or navigation bar jumps. Interactions within sections (charts, sliders, tabs, collapsible content) allow deeper exploration. The goal is progressive information discovery.
+    -->
+    <!-- Visualization & Content Choices:
+        - Newton's Laws (Sec II.A): HTML/CSS cards, Unicode icons (🛌➡️🏃, 💪➡️💨, 🔫⬅️➡️👤), click to expand. Justification: Digestible, visual. Method: HTML, Tailwind.
+        - Energy Transfer (Sec II.B, IV.A): HTML/CSS diagram (Chemical -> Thermal -> Kinetic). Justification: Clear flow. Method: HTML, Tailwind.
+        - Rifling & Spin (Sec III.A.3): Canvas animation/HTML elements for spin. Justification: Visualizes stability. Method: HTML, Tailwind, JS/Canvas.
+        - Bullet Drop (Sec III.B.1): Chart.js Line Chart (Distance vs. Drop). Interaction: Toggle "no gravity" line. Justification: Standard for projectile motion. Method: Chart.js.
+        - Wind Drift Mechanism (Sec III.B.3): Simplified Canvas diagram (bullet, wind, resultant airflow, drag). Justification: Clarifies misconception. Method: HTML, Tailwind, JS/Canvas.
+        - Environmental Variables (Sec III.B.4, Table 2): Interactive UI (sliders/buttons for Temp/Alt/Hum). Output descriptive text (e.g., "Higher Temp = Less Drag = Bullet Impacts Higher") / simple visual indicator. Interaction: Settings update output. Justification: Interactive Table 2. Method: HTML, Tailwind, JS.
+        - MOA/Mil-Dots (Sec IV.C, Table 1): Interactive Chart.js bar chart or HTML table for MOA vs Mil. Interaction: Hover for details. Justification: Visual comparison. Method: Chart.js or HTML, Tailwind, JS.
+        - Textual Content (All Sections): Formatted HTML, Tailwind typography. Collapsible sections. Interaction: Click to expand/collapse. Justification: Manages density. Method: HTML, Tailwind, JS.
+        - General Structure/Navigation: Sticky top nav, scroll-based reveal. Interaction: Click links. Justification: Standard SPA pattern. Method: HTML, Tailwind, JS.
+    -->
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .chart-container { position: relative; width: 100%; max-width: 600px; margin-left: auto; margin-right: auto; height: 300px; max-height: 400px; }
+        @media (min-width: 768px) { .chart-container { height: 350px; } }
+        .nav-link { transition: color 0.3s ease; }
+        .nav-link:hover { color: #d97706; /* amber-600 */ }
+        .interactive-card { transition: transform 0.3s ease, box-shadow 0.3s ease; }
+        .interactive-card:hover { transform: translateY(-5px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05); }
+        .section-fade-in { opacity: 0; transform: translateY(20px); transition: opacity 0.5s ease-out, transform 0.5s ease-out; }
+        .section-fade-in.visible { opacity: 1; transform: translateY(0); }
+        .tooltip { position: relative; display: inline-block; }
+        .tooltip .tooltiptext { visibility: hidden; width: 160px; background-color: #555; color: #fff; text-align: center; border-radius: 6px; padding: 5px 0; position: absolute; z-index: 1; bottom: 125%; left: 50%; margin-left: -80px; opacity: 0; transition: opacity 0.3s; }
+        .tooltip:hover .tooltiptext { visibility: visible; opacity: 1; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+
+    <nav class="bg-slate-800 text-white p-4 sticky top-0 z-50 shadow-lg">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold text-amber-400">Physics of Rifle Shooting</h1>
+            <div class="space-x-4">
+                <a href="#fundamentals" class="nav-link">Fundamentals</a>
+                <a href="#internal" class="nav-link">Internal</a>
+                <a href="#external" class="nav-link">External</a>
+                <a href="#terminal" class="nav-link">Terminal</a>
+                <a href="#optimization" class="nav-link">Optimization</a>
+                <a href="#conclusion" class="nav-link">Conclusion</a>
+            </div>
+        </div>
+    </nav>
+
+    <header class="bg-slate-700 text-white py-16 px-4 text-center section-fade-in">
+        <div class="container mx-auto">
+            <h2 class="text-4xl font-bold mb-4 text-amber-500">The Physics of Precision</h2>
+            <p class="text-lg max-w-2xl mx-auto">An interactive exploration of the fundamental science governing every rifle shot, from trigger pull to target impact. Discover how physics principles are crucial for achieving accuracy in rifle shooting.</p>
+        </div>
+    </header>
+
+    <main class="container mx-auto p-4 md:p-8 space-y-12">
+
+        <section id="fundamentals" class="py-8 section-fade-in">
+            <h3 class="text-3xl font-bold mb-6 text-amber-600 border-b-2 border-amber-500 pb-2">I. Fundamental Principles: Newton's Laws & Energy</h3>
+            <p class="mb-6 text-slate-700">The journey of a bullet is dictated by foundational physical laws. Newton's Laws of Motion govern its acceleration and the recoil felt by the shooter, while energy principles describe the transformation of chemical potential in propellant to the bullet's kinetic energy. Understanding these basics is the first step to mastering precision.</p>
+            <div class="grid md:grid-cols-3 gap-6 mb-8">
+                <div class="bg-white p-6 rounded-lg shadow-md interactive-card">
+                    <h4 class="text-xl font-semibold mb-2 text-slate-700">Newton's First Law: Inertia <span class="text-2xl">🛌➡️🏃</span></h4>
+                    <p class="text-slate-600">A bullet at rest stays at rest until the propellant's force overcomes its inertia. In flight, it would continue in a straight line if not for gravity and air resistance.</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md interactive-card">
+                    <h4 class="text-xl font-semibold mb-2 text-slate-700">Newton's Second Law: $F=ma$ <span class="text-2xl">💪➡️💨</span></h4>
+                    <p class="text-slate-600">The force from burning propellant causes the bullet to accelerate. A lighter bullet accelerates more with the same force.</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md interactive-card">
+                    <h4 class="text-xl font-semibold mb-2 text-slate-700">Newton's Third Law: Action-Reaction <span class="text-2xl">🔫⬅️➡️👤</span></h4>
+                    <p class="text-slate-600">As the bullet is propelled forward, an equal and opposite force (recoil) is exerted on the rifle and shooter. Though momentum is conserved, the bullet gets more kinetic energy due to its much smaller mass ($KE \propto v^2$).</p>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h4 class="text-xl font-semibold mb-3 text-slate-700">Energy Transfer in Firing</h4>
+                <p class="text-slate-600 mb-4">Firing a rifle involves a rapid energy conversion: chemical energy in propellant transforms into thermal energy (hot gases), then into the bullet's kinetic energy (motion) and recoil. Not all energy converts; some is lost as heat to the barrel, unburned propellant, and friction. Efficiency is key in firearm design.</p>
+                <div class="flex items-center justify-around p-4 bg-slate-50 rounded-md">
+                    <div class="text-center">
+                        <p class="text-lg font-medium text-amber-700">Chemical Energy</p><p class="text-sm">(Propellant)</p>
+                    </div>
+                    <span class="text-2xl font-bold text-slate-500 mx-2">&rarr;</span>
+                    <div class="text-center">
+                        <p class="text-lg font-medium text-amber-700">Thermal Energy</p><p class="text-sm">(Hot Gases)</p>
+                    </div>
+                    <span class="text-2xl font-bold text-slate-500 mx-2">&rarr;</span>
+                    <div class="text-center">
+                        <p class="text-lg font-medium text-amber-700">Kinetic Energy</p><p class="text-sm">(Bullet + Recoil)</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="internal" class="py-8 section-fade-in">
+            <h3 class="text-3xl font-bold mb-6 text-amber-600 border-b-2 border-amber-500 pb-2">II. Internal Ballistics: The Genesis of Motion</h3>
+            <p class="mb-6 text-slate-700">Internal ballistics covers everything from propellant ignition until the bullet exits the muzzle. This phase sets the stage for the bullet's flight, involving rapid pressure changes, precise propellant combustion, and the critical role of rifling in imparting spin for stability.</p>
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h4 class="text-xl font-semibold mb-2 text-slate-700">Ignition & Propellant Combustion</h4>
+                    <p class="text-slate-600 mb-3">Trigger pull -> firing pin strikes primer -> primer ignites propellant -> rapid gas generation -> pressure builds. Propellant burn rate is engineered to maximize energy transfer safely, matching firearm characteristics.</p>
+                    <h4 class="text-xl font-semibold mb-2 mt-4 text-slate-700">Pressure Dynamics & Barrel Time</h4>
+                    <p class="text-slate-600">Pressure peaks as the bullet moves down the barrel. Longer barrels generally yield higher muzzle velocity, but optimal length exists. Shorter, rigid barrels can sometimes offer better inherent accuracy.</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h4 class="text-xl font-semibold mb-2 text-slate-700">The Crucial Role of Rifling and Spin</h4>
+                    <p class="text-slate-600 mb-3">Helical grooves (rifling) in the barrel impart spin to the bullet. This gyroscopic stability prevents tumbling and drastically increases accuracy. Too little or too much spin can be detrimental. The optimal twist rate is calculated using formulas like the Green Hill Formula.</p>
+                    <div class="mt-4 p-4 bg-slate-50 rounded-md text-center">
+                        <p class="text-lg font-medium text-slate-700 mb-2">Bullet Spin Simulation</p>
+                        <canvas id="riflingCanvas" class="mx-auto border border-slate-300 rounded" width="200" height="100"></canvas>
+                        <p class="text-sm text-slate-500 mt-2">Spin stabilizes the bullet for a true flight path.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="external" class="py-8 section-fade-in">
+            <h3 class="text-3xl font-bold mb-6 text-amber-600 border-b-2 border-amber-500 pb-2">III. External Ballistics: Flight Through the Environment</h3>
+            <p class="mb-6 text-slate-700">Once the bullet exits the muzzle, its flight is governed by external forces: gravity causing drop, air resistance (drag) slowing it down, and wind causing lateral drift. Environmental conditions like temperature, altitude, and humidity also play significant roles by altering air density. For extreme long ranges, even the Earth's rotation and curvature become factors.</p>
+            
+            <div class="grid md:grid-cols-2 gap-8">
+                <div>
+                    <div class="bg-white p-6 rounded-lg shadow-md mb-6 interactive-card">
+                        <h4 class="text-xl font-semibold mb-2 text-slate-700">Gravitational Pull & Bullet Drop</h4>
+                        <p class="text-slate-600 mb-3">Gravity pulls the bullet downwards, causing a parabolic trajectory. This "bullet drop" increases with distance and flight time. Shooters compensate by aiming higher.</p>
+                        <div class="chart-container">
+                            <canvas id="bulletDropChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-lg shadow-md mb-6 interactive-card">
+                        <h4 class="text-xl font-semibold mb-2 text-slate-700">Air Resistance (Drag) & Aerodynamics</h4>
+                        <p class="text-slate-600 mb-3">Drag opposes the bullet's motion, reducing its velocity. A bullet's aerodynamic efficiency is its Ballistic Coefficient (BC) – higher BC means less drag. Shape (e.g., pointed vs. blunt) is crucial.</p>
+                    </div>
+                    
+                    <div class="bg-white p-6 rounded-lg shadow-md interactive-card">
+                        <h4 class="text-xl font-semibold mb-2 text-slate-700">Wind Drift: Lateral Deflection</h4>
+                        <p class="text-slate-600 mb-3">Wind causes lateral drift. It's not a simple push; the spin-stabilized bullet orients into the relative airflow (bullet path + wind). A component of drag then pushes it sideways. Complex but critical to understand.</p>
+                         <div class="mt-4 p-4 bg-slate-50 rounded-md text-center">
+                            <p class="text-lg font-medium text-slate-700 mb-2">Wind Drift Concept</p>
+                            <canvas id="windDriftCanvas" class="mx-auto border border-slate-300 rounded" width="250" height="150"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="bg-white p-6 rounded-lg shadow-md mb-6 interactive-card">
+                        <h4 class="text-xl font-semibold mb-2 text-slate-700">Environmental Variables</h4>
+                        <p class="text-slate-600 mb-4">Air density affects drag. Altitude, temperature, and humidity change air density. Modern ballistics programs help calculate these effects.</p>
+                        
+                        <div class="space-y-4 mb-4">
+                            <div>
+                                <label for="temperature" class="block text-sm font-medium text-slate-700">Temperature:</label>
+                                <select id="temperature" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-amber-500 focus:border-amber-500">
+                                    <option value="cold">Cold (Denser Air)</option>
+                                    <option value="moderate" selected>Moderate</option>
+                                    <option value="hot">Hot (Thinner Air)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="altitude" class="block text-sm font-medium text-slate-700">Altitude:</label>
+                                <select id="altitude" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-amber-500 focus:border-amber-500">
+                                    <option value="low">Low (Denser Air)</option>
+                                    <option value="medium" selected>Medium</option>
+                                    <option value="high">High (Thinner Air)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="humidity" class="block text-sm font-medium text-slate-700">Humidity:</label>
+                                <select id="humidity" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-amber-500 focus:border-amber-500">
+                                    <option value="low">Low (Denser Air - minor effect)</option>
+                                    <option value="moderate" selected>Moderate</option>
+                                    <option value="high">High (Thinner Air - minor effect)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="environmentalEffect" class="mt-4 p-3 bg-amber-100 text-amber-700 rounded-md text-center font-medium">Select conditions to see conceptual effects.</div>
+                    </div>
+                    
+                    <div class="bg-white p-6 rounded-lg shadow-md interactive-card">
+                        <h4 class="text-xl font-semibold mb-2 text-slate-700">Macro-Scale Effects (Extreme Long Range)</h4>
+                        <p class="text-slate-600">Beyond 1000m, Earth's rotation (Coriolis & Eötvös effects) and curvature become significant.
+                        <br><strong>Coriolis:</strong> Apparent deflection (right in N. Hemisphere, left in S. Hemisphere).
+                        <br><strong>Eötvös:</strong> Vertical deflection for E-W shots (high if East, low if West).
+                        <br><strong>Curvature:</strong> Earth drops away, target is physically lower.
+                        Advanced calculators are needed for these.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="terminal" class="py-8 section-fade-in">
+            <h3 class="text-3xl font-bold mb-6 text-amber-600 border-b-2 border-amber-500 pb-2">IV. Terminal Ballistics: The Moment of Impact</h3>
+            <p class="mb-6 text-slate-700">Terminal ballistics examines what happens when the bullet strikes the target. This involves energy transfer, and for deformable targets, the creation of temporary and permanent cavities. While critical for hunting or defense, for target shooting, simply hitting the mark is the primary goal.</p>
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h4 class="text-xl font-semibold mb-2 text-slate-700">Energy Transfer & Target Interaction</h4>
+                <p class="text-slate-600 mb-3">Upon impact, the bullet rapidly decelerates, transferring its kinetic energy ($KE = 1/2 mv^2$) to the target. Higher impact velocity means more energy transfer. Some energy is always lost to air resistance during flight.</p>
+                <h4 class="text-xl font-semibold mb-2 mt-4 text-slate-700">Cavities & Wounding (Deformable Targets)</h4>
+                <p class="text-slate-600 mb-1"><strong>Permanent Cavity:</strong> Direct crushing of tissue by the projectile.</p>
+                <p class="text-slate-600 mb-3"><strong>Temporary Cavity:</strong> Radial stretching of tissue around the bullet's path due to energy transfer. The preceding sonic pressure wave in tissue does *not* cause wounding.</p>
+                <h4 class="text-xl font-semibold mb-2 mt-4 text-slate-700">Bullet Design and Terminal Performance</h4>
+                <p class="text-slate-600">Bullet shape, composition (lead core, copper jacket), and tip design (FMJ, Soft Point, Hollow Point) dictate behavior on impact, tailored for penetration, expansion, or fragmentation depending on the intended use.</p>
+            </div>
+        </section>
+
+        <section id="optimization" class="py-8 section-fade-in">
+            <h3 class="text-3xl font-bold mb-6 text-amber-600 border-b-2 border-amber-500 pb-2">V. Optimizing Precision: Shooter, Ammunition & Equipment</h3>
+            <p class="mb-6 text-slate-700">Achieving consistent accuracy is a synergy of optimized ammunition, refined shooter technique grounded in biomechanics, and specialized equipment, including mathematical tools like MOA and Mil-Dots for sight adjustments and ranging.</p>
+            
+            <div>
+                <div class="mb-4 border-b border-gray-200">
+                    <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                        <button id="tab-ammo" class="tab-button whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-amber-500 text-amber-600" onclick="showTab('ammo')">Ammunition</button>
+                        <button id="tab-tech" class="tab-button whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-slate-500 hover:text-slate-700 hover:border-gray-300" onclick="showTab('tech')">Shooter Technique</button>
+                        <button id="tab-math" class="tab-button whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-slate-500 hover:text-slate-700 hover:border-gray-300" onclick="showTab('math')">Mathematical Tools</button>
+                    </nav>
+                </div>
+
+                <div id="content-ammo" class="tab-content bg-white p-6 rounded-lg shadow-md">
+                    <h4 class="text-xl font-semibold mb-3 text-slate-700">Ammunition Selection</h4>
+                    <p class="text-slate-600 mb-2"><strong>Propellant:</strong> High-energy, slow-burning powders matched to barrel length and projectile mass for optimal burn and velocity.</p>
+                    <p class="text-slate-600 mb-2"><strong>Projectile Mass & Muzzle Velocity:</strong> Key for trajectory and energy. Heavier bullets retain energy longer; lighter bullets achieve higher initial velocities.</p>
+                    <p class="text-slate-600"><strong>Efficiency:</strong> Converting chemical to kinetic energy is inefficient; much is lost as heat and unburned propellant. Continuous R&D aims to improve this.</p>
+                </div>
+
+                <div id="content-tech" class="tab-content bg-white p-6 rounded-lg shadow-md hidden">
+                    <h4 class="text-xl font-semibold mb-3 text-slate-700">Shooter Technique (Biomechanics)</h4>
+                    <ul class="list-disc list-inside text-slate-600 space-y-2">
+                        <li><strong>Stance & Body Position:</strong> Stable position aligning center of gravity over support base with minimal muscle tension, relying on skeletal support for a "zero net-force state."</li>
+                        <li><strong>Grip:</strong> Firm, consistent grip for recoil management and control.</li>
+                        <li><strong>Trigger Control:</strong> Smooth, consistent trigger pull without disturbing aim.</li>
+                        <li><strong>Follow-Through:</strong> Maintain control and sight picture after the shot.</li>
+                        <li><strong>Recoil Management:</strong> Techniques and equipment to absorb recoil, minimize muzzle rise.</li>
+                    </ul>
+                </div>
+
+                <div id="content-math" class="tab-content bg-white p-6 rounded-lg shadow-md hidden">
+                    <h4 class="text-xl font-semibold mb-3 text-slate-700">Mathematical Tools: MOA & Mil-Dots</h4>
+                    <p class="text-slate-600 mb-4">Angular units for sight adjustment and ranging. 1 MOA ≈ 1 inch at 100 yards. 1 Mil = 3.6 inches at 100 yards. Both scale linearly with distance.</p>
+                    <div class="chart-container" style="height: 400px; max-height: 450px;">
+                        <canvas id="moaMilChart"></canvas>
+                    </div>
+                    <p class="text-sm text-slate-500 mt-3 text-center">Comparison of 1 MOA vs 1 Mil subtension in inches at various distances.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="conclusion" class="py-8 section-fade-in">
+            <h3 class="text-3xl font-bold mb-6 text-amber-600 border-b-2 border-amber-500 pb-2">VI. Conclusion: Mastery Through Scientific Understanding</h3>
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <p class="text-slate-700 leading-relaxed">Rifle shooting is a profound demonstration of applied physics. Every phase—internal, external, and terminal ballistics—is governed by physical laws. Mastery comes not from intuition alone but from a deep scientific understanding of forces, energy, aerodynamics, and environmental effects. This knowledge drives innovation in firearms and ammunition and allows shooters to move from trial-and-error to a predictive, analytical approach. The pursuit of precision in rifle shooting is a testament to the power and elegance of physics in action.</p>
+            </div>
+        </section>
+    </main>
+
+    <footer class="bg-slate-800 text-white text-center p-6 mt-12">
+        <p>&copy; 2024 Interactive Ballistics Explorer. Content based on "The Physics of Precision" report.</p>
+    </footer>
+
+<script>
+    // Smooth scrolling for navigation links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            document.querySelector(this.getAttribute('href')).scrollIntoView({
+                behavior: 'smooth'
+            });
+        });
+    });
+
+    // Fade-in sections on scroll
+    const sections = document.querySelectorAll('.section-fade-in');
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('visible');
+            }
+        });
+    }, { threshold: 0.1 });
+    sections.forEach(section => {
+        observer.observe(section);
+    });
+
+    // Rifling Canvas Animation
+    const riflingCanvas = document.getElementById('riflingCanvas');
+    if (riflingCanvas) {
+        const rCtx = riflingCanvas.getContext('2d');
+        let bulletX = 20;
+        let angle = 0;
+        function drawRifling() {
+            rCtx.clearRect(0, 0, riflingCanvas.width, riflingCanvas.height);
+            
+            // Barrel
+            rCtx.fillStyle = '#D1D5DB'; // gray-300
+            rCtx.fillRect(0, 30, riflingCanvas.width, 40);
+
+            // Bullet
+            rCtx.save();
+            rCtx.translate(bulletX, riflingCanvas.height / 2);
+            rCtx.rotate(angle);
+            rCtx.fillStyle = '#F59E0B'; // amber-500
+            rCtx.beginPath();
+            rCtx.moveTo(-15, -5);
+            rCtx.lineTo(10, -5);
+            rCtx.lineTo(15, 0);
+            rCtx.lineTo(10, 5);
+            rCtx.lineTo(-15, 5);
+            rCtx.closePath();
+            rCtx.fill();
+            // Spin lines
+            rCtx.strokeStyle = '#B45309'; // amber-700
+            rCtx.lineWidth = 1;
+            rCtx.beginPath();
+            rCtx.moveTo(-10,0); rCtx.lineTo(5,0);
+            rCtx.moveTo(-8,-3); rCtx.lineTo(7,-1);
+            rCtx.moveTo(-8,3); rCtx.lineTo(7,1);
+            rCtx.stroke();
+            rCtx.restore();
+            
+            bulletX += 0.5;
+            angle += 0.1;
+            if (bulletX > riflingCanvas.width + 20) {
+                bulletX = -20;
+            }
+            requestAnimationFrame(drawRifling);
+        }
+        drawRifling();
+    }
+
+    // Wind Drift Canvas
+    const windDriftCanvas = document.getElementById('windDriftCanvas');
+    if (windDriftCanvas) {
+        const wdCtx = windDriftCanvas.getContext('2d');
+        function drawWindDrift() {
+            wdCtx.clearRect(0, 0, windDriftCanvas.width, windDriftCanvas.height);
+            const centerX = windDriftCanvas.width / 2;
+            const centerY = windDriftCanvas.height / 2;
+
+            // Bullet path (intended)
+            wdCtx.strokeStyle = '#9CA3AF'; // gray-400
+            wdCtx.beginPath();
+            wdCtx.moveTo(20, centerY);
+            wdCtx.lineTo(windDriftCanvas.width - 20, centerY);
+            wdCtx.stroke();
+            wdCtx.fillText("Intended Path", centerX - 30, centerY - 10);
+
+            // Bullet
+            wdCtx.fillStyle = '#F59E0B'; // amber-500
+            wdCtx.beginPath();
+            wdCtx.ellipse(centerX - 50, centerY + 20, 15, 5, Math.PI / 6, 0, 2 * Math.PI);
+            wdCtx.fill();
+            wdCtx.fillText("Bullet", centerX - 70, centerY + 45);
+
+
+            // Wind vector
+            wdCtx.strokeStyle = '#3B82F6'; // blue-500
+            wdCtx.lineWidth = 2;
+            wdCtx.beginPath();
+            wdCtx.moveTo(centerX, 20); 
+            wdCtx.lineTo(centerX, centerY + 10); 
+            wdCtx.lineTo(centerX - 5, centerY);
+            wdCtx.moveTo(centerX, centerY + 10);
+            wdCtx.lineTo(centerX + 5, centerY);
+            wdCtx.stroke();
+            wdCtx.fillText("Wind", centerX + 10, 40);
+
+            // Resultant airflow (conceptual)
+            wdCtx.strokeStyle = '#10B981'; // emerald-500
+            wdCtx.setLineDash([5, 5]);
+            wdCtx.beginPath();
+            wdCtx.moveTo(20, centerY); // Start of bullet path
+            wdCtx.quadraticCurveTo(centerX - 20, centerY + 10, centerX - 50, centerY + 20); // Curve towards bullet position but also downwards due to wind
+            wdCtx.stroke();
+            wdCtx.setLineDash([]);
+            wdCtx.fillText("Relative Airflow", centerX - 100, centerY - 20);
+            
+            // Actual drifted path
+            wdCtx.strokeStyle = '#EF4444'; // red-500
+            wdCtx.lineWidth = 2;
+            wdCtx.beginPath();
+            wdCtx.moveTo(20, centerY);
+            wdCtx.quadraticCurveTo(centerX, centerY + 30, windDriftCanvas.width - 20, centerY + 50);
+            wdCtx.stroke();
+            wdCtx.fillText("Actual Drifted Path", centerX - 50, centerY + 65);
+        }
+        drawWindDrift();
+    }
+
+
+    // Bullet Drop Chart
+    const bulletDropChartCtx = document.getElementById('bulletDropChart')?.getContext('2d');
+    if (bulletDropChartCtx) {
+        const distances = Array.from({length: 11}, (_, i) => i * 100); // 0 to 1000 yards
+        const drop = distances.map(d => -0.0005 * d * d); // Simplified parabolic drop (negative for downward)
+        const idealPath = distances.map(() => 0);
+
+        new Chart(bulletDropChartCtx, {
+            type: 'line',
+            data: {
+                labels: distances.map(d => `${d} yd`),
+                datasets: [{
+                    label: 'Bullet Trajectory (with Gravity)',
+                    data: drop,
+                    borderColor: '#F59E0B', // amber-500
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    tension: 0.1,
+                    fill: true
+                }, {
+                    label: 'Ideal Path (No Gravity/Drag)',
+                    data: idealPath,
+                    borderColor: '#6B7280', // gray-500
+                    borderDash: [5, 5],
+                    tension: 0.1,
+                    fill: false
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        title: { display: true, text: 'Bullet Drop (Conceptual Units)' },
+                        ticks: { callback: function(value) { return value <= 0 ? value : ''; } } // Show only 0 and negative values
+                    },
+                    x: {
+                        title: { display: true, text: 'Distance (Yards)' }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) { label += ': '; }
+                                if (context.parsed.y !== null) {
+                                    label += `${context.parsed.y.toFixed(1)} units`;
+                                }
+                                return label;
+                            }
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Conceptual Bullet Drop Over Distance'
+                    }
+                }
+            }
+        });
+    }
+    
+    // Environmental Factors Logic
+    const tempSelect = document.getElementById('temperature');
+    const altSelect = document.getElementById('altitude');
+    const humSelect = document.getElementById('humidity');
+    const effectDiv = document.getElementById('environmentalEffect');
+
+    function updateEnvironmentalEffect() {
+        if (!tempSelect || !altSelect || !humSelect || !effectDiv) return;
+
+        const temp = tempSelect.value;
+        const alt = altSelect.value;
+        const hum = humSelect.value;
+        let effects = [];
+
+        // Temperature
+        if (temp === 'cold') effects.push("Colder air is denser: more drag, more bullet drop. Lower muzzle velocity.");
+        else if (temp === 'hot') effects.push("Hotter air is thinner: less drag, less bullet drop. Higher muzzle velocity.");
+        else effects.push("Moderate temperature baseline.");
+
+        // Altitude
+        if (alt === 'low') effects.push("Lower altitude means denser air: more drag, more bullet drop.");
+        else if (alt === 'high') effects.push("Higher altitude means thinner air: less drag, less bullet drop.");
+        else effects.push("Medium altitude baseline.");
+        
+        // Humidity
+        if (hum === 'low') effects.push("Lower humidity means slightly denser air: minor increase in drag.");
+        else if (hum === 'high') effects.push("Higher humidity means slightly thinner air: minor decrease in drag.");
+        else effects.push("Moderate humidity baseline (minor effect overall).");
+
+        effectDiv.innerHTML = effects.join("<br>");
+    }
+    if (tempSelect && altSelect && humSelect) {
+      tempSelect.addEventListener('change', updateEnvironmentalEffect);
+      altSelect.addEventListener('change', updateEnvironmentalEffect);
+      humSelect.addEventListener('change', updateEnvironmentalEffect);
+      updateEnvironmentalEffect(); // Initial call
+    }
+
+
+    // Tabs for Optimization Section
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    function showTab(tabId) {
+        tabContents.forEach(content => {
+            content.classList.add('hidden');
+        });
+        tabButtons.forEach(button => {
+            button.classList.remove('border-amber-500', 'text-amber-600');
+            button.classList.add('border-transparent', 'text-slate-500', 'hover:text-slate-700', 'hover:border-gray-300');
+        });
+
+        document.getElementById('content-' + tabId).classList.remove('hidden');
+        document.getElementById('tab-' + tabId).classList.add('border-amber-500', 'text-amber-600');
+        document.getElementById('tab-' + tabId).classList.remove('border-transparent', 'text-slate-500', 'hover:text-slate-700', 'hover:border-gray-300');
+        
+        // Initialize MOA/Mil chart if math tab is selected and chart not already drawn
+        if (tabId === 'math' && !window.moaMilChartInstance) {
+            renderMoaMilChart();
+        }
+    }
+
+    // MOA/Mil-Dot Chart
+    function renderMoaMilChart() {
+        const moaMilCtx = document.getElementById('moaMilChart')?.getContext('2d');
+        if (moaMilCtx) {
+            const distances = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
+            const moaValues = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]; // Simplified 1 inch per 100yd
+            const milValues = [3.6, 7.2, 10.8, 14.4, 18.0, 21.6, 25.2, 28.8, 32.4, 36.0];
+
+            window.moaMilChartInstance = new Chart(moaMilCtx, {
+                type: 'bar',
+                data: {
+                    labels: distances.map(d => `${d} yd`),
+                    datasets: [
+                        {
+                            label: '1 MOA (inches)',
+                            data: moaValues,
+                            backgroundColor: 'rgba(245, 158, 11, 0.6)', // amber-500 with alpha
+                            borderColor: 'rgba(180, 83, 9, 1)', // amber-700
+                            borderWidth: 1
+                        },
+                        {
+                            label: '1 Mil (inches)',
+                            data: milValues,
+                            backgroundColor: 'rgba(55, 65, 81, 0.6)', // gray-700 with alpha
+                            borderColor: 'rgba(31, 41, 55, 1)', // gray-800
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Subtension (Inches)' }
+                        },
+                        x: {
+                            title: { display: true, text: 'Distance (Yards)' }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                             mode: 'index',
+                             intersect: false,
+                             callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) { label += ': '; }
+                                    if (context.parsed.y !== null) {
+                                        label += `${context.parsed.y.toFixed(1)} inches`;
+                                    }
+                                    // Add note for 1000yd MOA
+                                    if (context.dataset.label === '1 MOA (inches)' && context.label === '1000 yd') {
+                                        label += ' (actual ~10.47")';
+                                    }
+                                    return label;
+                                }
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'MOA vs. Mil-Dot Subtension Comparison'
+                        },
+                        legend: {
+                            position: 'top',
+                        }
+                    }
+                }
+            });
+        }
+    }
+    // Initially show the first tab
+    if(document.getElementById('tab-ammo')) {
+      showTab('ammo');
+    }
+</script>
+
+</body>
+</html>
